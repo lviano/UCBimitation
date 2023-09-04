@@ -146,7 +146,7 @@ def run_lsvi_ucb(K = 100):
     
     for k in range(K):
         states, actions, rewards = collect_trajectories(value_params, env, covariance_inv )
-        gammas = np.array([env.gamma**h for h in range(len(rewards))])
+        gammas = np.array([1**h for h in range(len(rewards))])
         print("Episode " + str(k) + ": " + str(np.sum(gammas*rewards)))
         states_dataset = states_dataset + states
         actions_dataset = actions_dataset + actions
