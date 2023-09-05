@@ -121,7 +121,7 @@ def collect_trajectories(value_params_list, env):
         next_actions.append(action)
     return states, actions, rewards, next_states, next_actions
 
-def run_iqlearn(K, tau=1):
+def run_iqlearn(K, tau=5):
     theta = np.zeros(state_dim + env.action_space.n)
     value_params_list = [theta]
     action_features = np.eye(env.action_space.n)
