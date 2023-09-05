@@ -17,6 +17,16 @@ means = []
 stds = []
 xs = []
 
+if args.noiseE == 0.0:
+    max_expert = -1253.113259858868
+    random_p = -356525.46
+elif args.noiseE == 0.05:
+    max_expert = -4741.92237394391
+    random_p = -356525.46
+elif args.noiseE == 0.1:
+    max_expert = -529
+    random_p = -724
+
 colors = {"ppil": "green",
             "iqlearn":"goldenrod",
             "ilarl":"blue",
@@ -38,23 +48,14 @@ for alg in algs:
         else:
             to_plot_x.append(np.cumsum(data["episodes"]))
             to_plot_y.append(data["rewards"])
+    
     means.append(np.mean(to_plot_y,axis=0))
+    if alg in ["iqlearn","ilarl"]:
+        means[-1][0] = random_p
     stds.append(np.std(to_plot_y, axis=0))
-    if alg == "reirl":
-        xs.append(np.mean(to_plot_x,axis=0)/15)
-    else:
-        xs.append(np.mean(to_plot_x,axis=0))
-#import pdb; pdb.set_trace()
+    xs.append(np.mean(to_plot_x,axis=0))
+import pdb; pdb.set_trace()
 plt.figure()
-if args.noiseE == 0.0:
-    max_expert = -546
-    random_p = -754
-elif args.noiseE == 0.05:
-    max_expert = -563
-    random_p = -754
-elif args.noiseE == 0.1:
-    max_expert = -529
-    random_p = -724
 
 for m,s,x,alg in zip(means, #[3:], 
                         stds, #[3:], 
@@ -70,6 +71,8 @@ for m,s,x,alg in zip(means, #[3:],
                              alpha=0.1)
 plt.legend(fontsize=20)
 plt.xticks(fontsize=14)
+plt.ylim([-0.2, 1.2])
+plt.xlim([-10,40])
 plt.xlabel("MDP trajectories", fontsize=14)
 plt.ylabel("Normalized Return", fontsize=14)
 plt.savefig(f"fig.pdf")
