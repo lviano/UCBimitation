@@ -91,7 +91,7 @@ np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 env.seed(args.seed)
 
-def collect_trajectories(value_params, env, covariance_inv):
+def collect_trajectories(value_params, env, covariance_inv, noisy=False):
     state = env.reset()
     action_features = np.eye(env.action_space.n)
     h = 0
@@ -105,6 +105,9 @@ def collect_trajectories(value_params, env, covariance_inv):
         bonus = compute_bonus(state,covariance_inv)
         action = np.argmax(np.clip(reward + args.gamma*value + args.beta*bonus,
                                 -80/(1 - args.gamma),100/(1 - args.gamma)))
+        if noisy:
+            if np.random.choice(2):
+                action = np.random.choice(env.action_space.n)
         next_state, _, done, _ = env.step(action)
         states.append(state)
         actions.append(action)
@@ -154,16 +157,18 @@ def run_lsvi_ucb(K = 100):
         # Save expert data
         states_to_save = [states]
         actions_to_save = [actions]
-        for _ in range(1):
-            states_to_app, actions_to_app, _ = collect_trajectories(value_params, env, covariance_inv )
-            states_to_save.append(states_to_app)
-            actions_to_save.append(actions_to_app)
-            # if not k % 45:
-            #     plt.figure(k)
-            #     plt.scatter(np.stack(states_to_app)[:,0], np.stack(states_to_app)[:,1] )
-            #     plt.savefig("figs/"+ str(k) + ".png")
-        #with open(assets_dir(subfolder+"/expert_trajs")+"/trajs"+str(k)+".pkl", "wb") as f:
-        #    pickle.dump({"states": states_to_save, "actions": actions_to_save}, f)
+        if k > 10:
+            for _ in range(10):
+                states_to_app, actions_to_app, re = collect_trajectories(value_params, env, covariance_inv, noisy=True )
+                states_to_save.append(states_to_app)
+                actions_to_save.append(actions_to_app)
+                print(np.sum(re))
+                # if not k % 45:
+                #     plt.figure(k)
+                #     plt.scatter(np.stack(states_to_app)[:,0], np.stack(states_to_app)[:,1] )
+                #     plt.savefig("figs/"+ str(k) + ".png")
+            with open(assets_dir(subfolder+"/expert_trajs")+"/noisy_trajs"+str(k)+".pkl", "wb") as f:
+                pickle.dump({"states": states_to_save, "actions": actions_to_save}, f)
         covariance = compute_covariance(states_dataset, actions_dataset)
         covariance_inv = np.linalg.inv(covariance)
         targets_dataset = []

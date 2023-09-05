@@ -27,6 +27,8 @@ parser.add_argument('--render', action='store_true', default=False,
                     help='render the environment')
 parser.add_argument('--beta', type=float, default=100.0, metavar='G',
                     help='log std for the policy (default: -0.0)')
+parser.add_argument('--eta', type=float, default=1.0, metavar='G',
+                    help='log std for the policy (default: -0.0)')
 parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
                     help='discount factor (default: 0.99)')
 parser.add_argument('--num-threads', type=int, default=4, metavar='N',
@@ -111,7 +113,7 @@ def collect_trajectories(value_params_list, reward_weights, env, covariance_inv)
             r = w.dot(np.vstack([state.reshape(-1,1).repeat(4, axis=1), action_features ]))
             sum = sum + np.clip(r + args.gamma*value + args.beta*bonus,
                                 -80/(1 - args.gamma),100/(1 - args.gamma))
-        action_distribution = special.softmax(sum/len(value_params_list))
+        action_distribution = special.softmax(args.eta*sum/len(value_params_list))
         action = np.random.choice(env.action_space.n, p=action_distribution)
         next_state, reward, done, _ = env.step(action)
         states.append(state)
@@ -188,7 +190,7 @@ def run_imitation_learning(K, tau=5):
             for state, next_state in zip(states_dataset, next_states_dataset):
                 reward = reward_weights[i].dot(
                     np.vstack([next_state.reshape(-1,1).repeat(4, axis=1), action_features ])) 
-                targets_dataset.append(special.logsumexp(np.clip(reward + args.gamma*value_params.dot(
+                targets_dataset.append(special.logsumexp(args.eta*np.clip(reward + args.gamma*value_params.dot(
                     np.vstack([next_state.reshape(-1,1).repeat(4, axis=1), action_features ])) 
                     + args.beta*compute_bonus(next_state, covariance_inv), -80/(1 - args.gamma), 
                     100/(1 - args.gamma))))

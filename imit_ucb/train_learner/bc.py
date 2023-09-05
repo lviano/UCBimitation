@@ -4,6 +4,7 @@ import gym_simple
 import my_gym
 from scipy import special
 from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
 import os
 import sys
 import pickle
@@ -123,10 +124,13 @@ def run_bc():
         policy = HistGradientBoostingClassifier(min_samples_leaf=1).fit(
             np.vstack(ls), 
             np.vstack(lsa))
-    _, _, rewards, _, _ = collect_trajectories(policy, env)
+    rss = []
+    for _ in range(10):
+        _, _, rewards, _, _ = collect_trajectories(policy, env)
 
-    rs = np.sum(np.array([args.gamma**h for h in range(len(rewards))])*rewards)
-    print(rs)
+        rs = np.sum(np.array([1**h for h in range(len(rewards))])*rewards)
+        rss.append(rs)
+    print(np.mean(rss), "+-", np.std(rss))
 
     with open(assets_dir(subfolder+f"/bc/reward_history/{args.seed}_{args.n_expert_trajs}.p"), "wb") as f:
             pickle.dump(np.array([rs]), f)
