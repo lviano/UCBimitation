@@ -29,10 +29,10 @@ elif args.noiseE == 0.05:
     bc = -1165.5682994141093
     bc_std = 18.57952907393339
 elif args.noiseE == 0.1:
-    max_expert = -1145
+    max_expert = -2500
     random_p = -356525.46
-    bc = -3960.4115080747433
-    bc_std = 1782.7501572488752
+    bc = -5427.4115080747433
+    bc_std = 4438.7501572488752
 
 colors = {"ppil": "green",
             "iqlearn":"goldenrod",
@@ -44,7 +44,7 @@ for alg in algs:
     to_plot_x = []
     to_plot_y = []
     for seed in range(0,5):
-        with open(deterministic_assets_dir(subfolder+f"/{alg}/reward_history/{seed}_{args.n_expert_trajs}.p"), "rb") as f:
+        with open(assets_dir(subfolder+f"/{alg}/reward_history/{seed}_{args.n_expert_trajs}.p"), "rb") as f:
             data = pickle.load(f)
         if alg in ["ppil","ilarl","iqlearn"]:
             tau = 5 if alg in ["ppil","ilarl","iqlearn"] else 1
@@ -55,7 +55,7 @@ for alg in algs:
         else:
             to_plot_x.append(np.cumsum(data["episodes"]))
             to_plot_y.append(data["rewards"])
-    
+    print(alg)
     means.append(np.mean(to_plot_y,axis=0))
     if alg in ["iqlearn","ilarl"]:
         means[-1][0] = random_p
@@ -76,6 +76,7 @@ for m,s,x,alg in zip(means, #[3:],
                         xs, #[3:], 
                         algs, #[3:]
                         ):
+    print(alg)
     m_norm = (m - random_p)/(max_expert - random_p)
     s_norm = s/(max_expert - random_p)
     ax.plot(x,m_norm,"-o", color=colors[alg], label=alg)
@@ -90,11 +91,11 @@ ax.set_yticks([0,1])
 plt.xticks(fontsize=30)
 plt.yticks(fontsize=30)
 plt.ylim([-0.1, 1.1])
-plt.xlim([-1,40])
+plt.xlim([-1,200])
 plt.xlabel("MDP trajectories", fontsize=30)
 #plt.ylabel("Normalized Return", fontsize=30)
 plt.tight_layout()
-plt.savefig(f"noiseE{args.noiseE}.pdf")
+plt.savefig(f"noisy_noiseE{args.noiseE}.pdf")
 
 for m,s,x,alg in zip(means, #[3:], 
                         stds, #[3:], 
@@ -111,19 +112,17 @@ for m,s,x,alg in zip(means, #[3:],
                              alpha=0.1)
 #plt.legend(fontsize=20)
 ax.xaxis.set_major_locator(MaxNLocator(5)) 
-ax.yaxis.set_major_locator(MaxNLocator(2)) 
-ax.set_yticks([0,1])
+ax.yaxis.set_major_locator(MaxNLocator(2))
 plt.xticks(fontsize=30)
-plt.yticks(fontsize=30)
-plt.ylim([-0.1, 1.1])
-plt.xlim([-1,40])
+plt.yticks(fontsize=20)
+plt.xlim([-1,200])
 plt.xlabel("MDP trajectories", fontsize=30)
 #plt.ylabel("Normalized Return", fontsize=30)
 #plt.show()
-ax.set_yticks([0.97,1.03])
-plt.ylim([0.95, 1.05])
+ax.set_yticks([0.97,1.0])
+plt.ylim([0.95, 1.01])
 plt.tight_layout()
-plt.savefig(f"noiseE{args.noiseE}_zoom.pdf")
+plt.savefig(f"noisy_noiseE{args.noiseE}_zoom.pdf")
 plt.show()
 
 
