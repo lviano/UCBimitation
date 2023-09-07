@@ -5,8 +5,8 @@ import pickle
 ilarl = np.zeros((100,20))
 d = 100
 true_theta = np.zeros(d)
-#true_theta[d-1] = 1
 true_theta[:-1:2] = 1
+
 n_actions = 20
 np.random.seed(0)
 random.seed(0)
@@ -23,33 +23,35 @@ for seed in range(100):
     #expert[r == np.max(r)] = 1
     trajectories = np.random.choice(range(n_actions), p=expert, size=(10))
 
-    efev = np.sum([features[t] for t in trajectories], axis = 0)
+    efev = np.sum([0.999**t*features[t] for t in trajectories], axis = 0)
     
     w = np.zeros(d)
     Qs = []
     policies = np.zeros((20,n_actions))
+    Q_batch = 0
     for j in range(20):
         learner_trajectories = []
         covariance = np.eye(d)
-        for k in range(5):
+        for k in range(20):
             learner_trajectories.append(np.random.choice(range(n_actions), p=policy))
             covariance += np.outer(features[learner_trajectories[-1]],
                                     features[learner_trajectories[-1]])
         bonus = np.array([np.sqrt(np.dot(features[a], np.linalg.solve(covariance, features[a])))
                             for a in range(n_actions)])
-        lfev = np.sum([features[t] for t in learner_trajectories], axis = 0)
-        Q_batch = 0
-        for k in range(5):
+        lfev = np.sum([0.999**t*features[t] for t in learner_trajectories], axis = 0)
+        
+        for k in range(20):
             w = w + 0.001*(efev - lfev)
             if np.linalg.norm(w) > np.linalg.norm(true_theta):
                 w = w/np.linalg.norm(w)
-            Q_batch += features.dot(w) + 0.1*bonus
+            Q_batch += features.dot(w) + 0.09*bonus + 0.999*policy.dot(Q_batch)
+            Q_batch =  np.clip(Q_batch,-1/(1-0.999),1/(1-0.999))
         Qs.append(Q_batch/5)
 
         policy = special.softmax(np.sum(np.array(Qs),axis=0))
         policies[j,:] = policy
         mean_policy = policies[:(j+1)].mean(axis=0)
-        ilarl[seed][j] = mean_policy.dot(features).dot(true_theta)
+        ilarl[seed][j] = policy.dot(features).dot(true_theta)/(1 - 0.999)
 
 
 with open("ilarl.p","wb") as f:
