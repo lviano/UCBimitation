@@ -31,9 +31,19 @@ elif args.noiseE == 0.05:
 elif args.noiseE == 0.1:
     max_expert = -2500
     random_p = -356525.46
-    bc = -5427.4115080747433
-    bc_std = 4438.7501572488752
-
+    if args.n_expert_trajs == 1:
+        bc = -27635.4115080747433
+        bc_std = 30000.7501572488752
+    elif args.n_expert_trajs == 2:
+        bc = -5427.4115080747433
+        bc_std = 4438.7501572488752
+    elif args.n_expert_trajs == 3:
+        bc = -2054.4819211391077
+        bc_std =  829.6770278814829
+    elif args.n_expert_trajs == 5:
+        bc = -1522.5870483696021
+        bc_std =  120
+    
 colors = {"ppil": "green",
             "iqlearn":"goldenrod",
             "gail":"brown",
@@ -95,7 +105,7 @@ plt.xlim([-1,200])
 plt.xlabel("MDP trajectories", fontsize=30)
 #plt.ylabel("Normalized Return", fontsize=30)
 plt.tight_layout()
-plt.savefig(f"noisy_noiseE{args.noiseE}.pdf")
+plt.savefig(f"noisy_noiseE{args.noiseE}_n_traj{args.n_expert_trajs}.pdf")
 
 for m,s,x,alg in zip(means, #[3:], 
                         stds, #[3:], 
@@ -119,8 +129,12 @@ plt.xlim([-1,200])
 plt.xlabel("MDP trajectories", fontsize=30)
 #plt.ylabel("Normalized Return", fontsize=30)
 #plt.show()
-ax.set_yticks([0.97,1.0])
-plt.ylim([0.95, 1.01])
+if args.n_expert_trajs == 1:
+    ax.set_yticks([0.9,1.0])
+    plt.ylim([0.85, 1.01])
+else:
+    ax.set_yticks([0.97,1.0])
+    plt.ylim([0.95, 1.01])
 plt.tight_layout()
 plt.savefig(f"noisy_noiseE{args.noiseE}_zoom.pdf")
 plt.show()
