@@ -148,7 +148,7 @@ def compute_bonus(state, covariance_inv, beta = args.beta):
         bonus.append(norm_feat*contraction_factor) #sigmoid function
     return np.array(bonus), contraction_factor
 
-def run_imitation_learning(K, tau=1):
+def run_imitation_learning(K, tau=5):
     value_params = np.zeros(state_dim + env.action_space.n)
     value_params_list = [value_params]
     w = np.zeros(state_dim + env.action_space.n)
