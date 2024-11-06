@@ -139,12 +139,12 @@ def compute_covariance(states_dataset, actions_dataset):
     for feature in features:
         covariance += np.outer(feature, feature)
     return covariance
-def compute_bonus(state, covariance_inv):
+def compute_bonus(state, covariance_inv, beta = args.beta):
     bonus = []
     for a in range(env.action_space.n):
         feature = np.concatenate([state, np.eye(env.action_space.n)[a]])
         norm_feat = np.sqrt(feature.dot(covariance_inv).dot(feature))
-        contraction_factor = special.expit(-norm_feat + np.log(args.max_iter_num))
+        contraction_factor = special.expit(-beta*norm_feat + np.log(args.max_iter_num))
         bonus.append(norm_feat*contraction_factor) #sigmoid function
     return np.array(bonus), contraction_factor
 
