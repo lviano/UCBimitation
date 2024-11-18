@@ -57,8 +57,6 @@ torch.set_default_dtype(dtype)
 device = torch.device('cuda', index=args.gpu_index) if torch.cuda.is_available() else torch.device('cpu')
 if torch.cuda.is_available():
     torch.cuda.set_device(args.gpu_index)
-
-"""environment"""]
 env = gym.make(args.env_name, feature_dim=10,  n_states=100, n_actions = 10)
 subfolder = "env"+str(args.env_name)+"type"+str(args.grid_type)+"noiseE"+str(args.noiseE)
 with open(assets_dir(subfolder+"/expert_trajs/"+args.expert_trajs), "rb") as f:
@@ -124,19 +122,27 @@ def compute_covariance(states_dataset, actions_dataset):
         covariance += np.outer(feature, feature)
     return covariance
     
-def compute_bonus(state, covariance_inv, beta = args.beta):
+def compute_bonus(covariance_inv, beta = args.beta):
     norm_feat = np.sqrt(env.features.dot(covariance_inv).dot(env.features.transpose(2,0,1)))
     contraction_factor = special.expit(-beta*norm_feat + np.log(args.max_iter_num))
     bonus = norm_feat*contraction_factor
     return bonus, contraction_factor
 
-def run_imitation_learning(K, tau=5):
-    params = np.zeros(env.features.shape[2])
+def softmax(vec,axis):
+    vec = np.exp(vec - np.max(vec,axis=axis,keepdims=True))
+    return vec / np.sum(vec,axis=axis,keepdims=True)
+
+def run_imitation_learning(K, eta=1):
+    policy_list=[]
+    zeta = np.zeros(env.features.shape[2])
     w = np.zeros(env.features_reward.shape[1])
+    Q = np.zeros((env.observation_space.n,env.action_space.n))
+    V = np.zeros((env.observation_space.n))
     reward_weights = [w]
     covariance_inv = 1/8e-2*np.eye(env.features.shape[2])
+    covariance_e = 8e-2*np.eye(env.features.shape[2])
     policy = np.ones((env.observation_space.n,env.action_space.n))/env.action_space.n
-    """create agent"""
+    policy_list.append(policy)
     rs=[]
     for k in range(K):
         states_dataset = []
@@ -160,38 +166,25 @@ def run_imitation_learning(K, tau=5):
             actions_dataset = actions_dataset + actions
             next_states_dataset = next_states_dataset + next_states
         reward_weights = []
-        for i in range(tau):
             
-            w = w - \
-                0.001*(compute_features_expectation(states_traj_data,actions_traj_data,env) - expert_fev)
-            reward_weights.append(w)
+        w = w - \
+            0.001*(compute_features_expectation(states_traj_data,actions_traj_data,env) - expert_fev)
+        reward_weights.append(w)
         covariance = compute_covariance(states_dataset, actions_dataset)
         covariance_inv = np.linalg.inv(covariance)
-        targets_dataset = []
-        for i in range(tau):
-            for state, next_state in zip(states_dataset, next_states_dataset):
-                reward = reward_weights[i].dot(
-                    np.vstack([next_state.reshape(-1,1).repeat(4, axis=1), action_features ])) 
-                sum = 0
-                bonus, contraction_factor = compute_bonus(next_state, covariance_inv)
-                action_features *= contraction_factor
-                for value_params, w in zip(value_params_list,reward_weights):
-                    value = value_params.dot(np.vstack([state.reshape(-1,1).repeat(4, axis=1), action_features ]))
-                    r = w.dot(np.vstack([state.reshape(-1,1).repeat(4, axis=1), action_features ]))
-                    sum = sum + r + args.gamma*value + args.beta*bonus
-                prob = special.softmax(args.eta*sum/len(value_params_list))
-                targets_dataset.append(np.dot(prob,args.eta*(reward + args.gamma*value_params.dot(
-                    np.vstack([next_state.reshape(-1,1).repeat(4, axis=1), action_features ])) 
-                    + args.beta*bonus)))
-            
-            target = 0
-            #i = 0
-            for state,action, value in zip(states_dataset, actions_dataset, targets_dataset):
-                #i = i + 1
-                #print(i)
-                target = target + value*np.concatenate([state, np.eye(env.action_space.n)[action]])
-            value_params = covariance_inv.dot(target)
-            value_params_list.append(value_params)
+        if np.linalg.det(covariance) >= 2*np.linalg.det(covariance_e) or k == 0:
+            covariance_e = covariance
+            bonus_e, contraction_factor = compute_bonus(covariance_e)
+            features_e = env.features*contraction_factor
+            features_reward_e = env.features_reward*contraction_factor
+            policy = np.ones((env.observation_space.n,env.action_space.n))/env.action_space.n
+        for state,action,state_prime in zip(states_dataset,actions_dataset,next_states_dataset):
+            target_vec += env.features[state,action]*V[state_prime]
+        zeta = covariance_inv.dot(target_vec)
+        Q = features_reward_e.dot(w) + env.gamma*features_e.dot(zeta) + bonus_e
+        V = policy.dot(Q.T)
+        policy = softmax(eta*Q + np.log(policy))
+        policy_list.append(policy)
         
         # plt.figure(k)
         # plt.scatter(np.stack(states)[:,0], np.stack(states)[:,1], color="blue" )
@@ -200,7 +193,7 @@ def run_imitation_learning(K, tau=5):
     with open(assets_dir(subfolder+f"/fra/reward_history/{args.seed}_{args.n_expert_trajs}.p"), "wb") as f:
         pickle.dump(np.array(rs), f)
     with open(assets_dir(subfolder+f"/fra/learned_models/{args.seed}_{args.n_expert_trajs}.p"), "wb") as f:
-        pickle.dump({"thetas": value_params_list,
+        pickle.dump({"policies": policy_list,
                      "covariance": covariance_inv}, 
                     f)
         
