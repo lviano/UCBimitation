@@ -16,7 +16,7 @@ from models.mlp_policy_disc import DiscretePolicy
 from core.ppo import ppo_step
 from core.common import estimate_advantages
 from core.agent import Agent
-
+from train_expert.soft_value_iteration import get_expert
 
 parser = argparse.ArgumentParser(description='UCB')
 parser.add_argument('--env-name', default="LinMDP-v0", metavar='G',
@@ -58,35 +58,10 @@ device = torch.device('cuda', index=args.gpu_index) if torch.cuda.is_available()
 if torch.cuda.is_available():
     torch.cuda.set_device(args.gpu_index)
 env = gym.make(args.env_name, feature_dim=10,  n_states=100, n_actions = 10)
-subfolder = "env"+str(args.env_name)+"type"+str(args.grid_type)+"noiseE"+str(args.noiseE)
-with open(assets_dir(subfolder+"/expert_trajs/"+args.expert_trajs), "rb") as f:
-    data = pickle.load(f)
-if not os.path.isdir(assets_dir(subfolder+f"/fra/learned_models")):
-    os.makedirs(assets_dir(subfolder+f"/fra/learned_models"))
-if not os.path.isdir(assets_dir(subfolder+f"/fra/reward_history")):
-    os.makedirs(assets_dir(subfolder+f"/fra/reward_history"))
-state_dim = env.observation_space.n
-is_disc_action = len(env.action_space.shape) == 0
-
+subfolder = "env"+str(args.env_name)
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 env.seed(args.seed)
-
-def compute_features_expectation(states,actions, env):
-    features = []
-    for traj_states, traj_actions in zip(states[:args.n_expert_trajs], actions[:args.n_expert_trajs]):
-        h = 0
-        features_exp = 0
-        for state,action in zip(traj_states, traj_actions):
-            features_exp = features_exp + \
-                args.gamma**h * env.features[state,action]
-            h = h + 1
-        features.append(features_exp)
-    return np.mean(features, axis=0)
-
-expert_fev = compute_features_expectation(data["states"][:args.n_expert_trajs],
-                                             data["actions"][:args.n_expert_trajs],env)
-
 def collect_trajectories(policy):
     state = env.reset()
     h = 0
@@ -112,6 +87,26 @@ def collect_trajectories(policy):
         rewards.append(reward)
         next_states.append(next_state)
     return states, actions, rewards, next_states
+
+expert_policy = get_expert(env)
+
+expert_states, expert_actions, _, _ = collect_trajectories(expert_policy)
+
+
+def compute_features_expectation(states,actions, env):
+    features = []
+    for traj_states, traj_actions in zip(states[:args.n_expert_trajs], actions[:args.n_expert_trajs]):
+        h = 0
+        features_exp = 0
+        for state,action in zip(traj_states, traj_actions):
+            features_exp = features_exp + \
+                args.gamma**h * env.features[state,action]
+            h = h + 1
+        features.append(features_exp)
+    return np.mean(features, axis=0)
+
+expert_fev = compute_features_expectation([expert_states], [expert_actions],env)
+
 
 def compute_covariance(states_dataset, actions_dataset):
     features = []
@@ -148,23 +143,15 @@ def run_imitation_learning(K, eta=1):
         states_dataset = []
         actions_dataset = []
         next_states_dataset = []
-        for i in range(tau):
-            states, actions, true_rewards, next_states = collect_trajectories(policy, 
-                                                                reward_weights, 
-                                                                env, 
-                                                                covariance_inv )
-            if i == 0:
-                states_traj_data = [states]
-                actions_traj_data = [actions]
-            else:
-                states_traj_data.append(states)
-                actions_traj_data.append(actions)
+        states, actions, true_rewards, next_states = collect_trajectories(policy)
+        states_traj_data = [states]
+        actions_traj_data = [actions]
 
-            rs.append(np.sum(np.array([1**h for h in range(len(true_rewards))])*true_rewards))
-            print("Episode " + str(k) + ": " + str(rs[-1]))
-            states_dataset = states_dataset + states
-            actions_dataset = actions_dataset + actions
-            next_states_dataset = next_states_dataset + next_states
+        rs.append(np.sum(np.array([1**h for h in range(len(true_rewards))])*true_rewards))
+        print("Episode " + str(k) + ": " + str(rs[-1]))
+        states_dataset = states_dataset + states
+        actions_dataset = actions_dataset + actions
+        next_states_dataset = next_states_dataset + next_states
         reward_weights = []
             
         w = w - \

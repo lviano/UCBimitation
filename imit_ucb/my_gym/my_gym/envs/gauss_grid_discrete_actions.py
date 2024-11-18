@@ -271,6 +271,9 @@ class DiscreteGaussianGridWorld(TabularEnv):
                 reward += 100
         return reward
 
+def softmax(vec,axis):
+    vec = np.exp(vec - np.max(vec,axis=axis,keepdims=True))
+    return vec / np.sum(vec,axis=axis,keepdims=True)
 
 class LinearMDP(gym.Env):
     metadata = {
@@ -282,24 +285,26 @@ class LinearMDP(gym.Env):
     def __init__(self,feature_dim,n_states,n_actions):
 
         self.viewer = None
+        self.gamma=0.99
         # although there are 2 terminal squares in the grid
         # they are considered as 1 state
         # therefore observation is between 0 and 14
         self.feature_dim = feature_dim
         self.action_space = spaces.Discrete(n_actions)
         self.observation_space = spaces.Discrete(n_states)
-        self.features_reward = np.random.randn(n_states,feature_dim)
-        self.features_transition = np.random.randn(n_states,n_actions,feature_dim)
+        self.features_reward = np.random.randn(n_states,n_actions,feature_dim)
+        self.features_transition = softmax(np.random.randn(n_states,n_actions,feature_dim),axis=2)
         self.features = np.concatenate(
-            [np.expand_dims(self.features_reward,axis=1).repeat(n_actions,axis=1),
+            [self.features_reward,
             self.features_transition], axis=2)
         self.w_true = np.random.randn(feature_dim)
-        self.M = np.random.randn(feature_dim,n_states)
+        self.M = softmax(np.random.randn(feature_dim,n_states),axis=1)
         self.reward = self.features_reward@self.w_true
         self.transition = self.features_transition@self.M
         self.transition = self.transition.reshape(n_states,n_actions,n_states)
         self.steps_from_last_reset = 0
-
+        self.n_states = self.observation_space.n
+        self.n_actions = self.action_space.n
     def step(self,a):
         reward = self.reward[self.state]
         if self.done:
