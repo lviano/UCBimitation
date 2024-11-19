@@ -175,10 +175,11 @@ def run_imitation_learning(K, eta=0.01):
     covariance = 1e-15*np.eye(env.features.shape[2])
     policy = np.ones((env.observation_space.n,env.action_space.n))/env.action_space.n
     policy_list.append(policy)
-    rs=[]
+    rs = [(expert_value - evaluate_policy(env,policy))/expert_value]
     states_dataset = []
     actions_dataset = []
     next_states_dataset = []
+    reward_weights = []
     for k in range(K):
         if np.linalg.det(covariance) >= 2*np.linalg.det(covariance_e) or k == 0:
             print("Update"+str(k))
@@ -195,32 +196,23 @@ def run_imitation_learning(K, eta=0.01):
         states_dataset = states_dataset + states
         actions_dataset = actions_dataset + actions
         next_states_dataset = next_states_dataset + next_states
-        reward_weights = []
+        
             
         w = w - (compute_features_expectation(states_traj_data,actions_traj_data,env) - expert_fev)
         reward_weights.append(w)
-        #covariance = compute_covariance(states_dataset, actions_dataset)
         covariance = update_covariance(states,actions,covariance)
         covariance_inv = np.linalg.inv(covariance)
-        #print(np.linalg.det(covariance))
         
         target_vec=0
         for state,action,state_prime in zip(states_dataset,actions_dataset,next_states_dataset):
             target_vec += env.features[state,action]*V[state_prime]
         zeta = covariance_inv.dot(target_vec)
         Q = features_reward_e.dot(w) + env.gamma*features_e.dot(zeta) + bonus_e
-        #print(contraction_factor, "contraction_factor")
         V = np.diag(policy.dot(Q.T))
         policy = softmax(eta*Q + np.log(policy),axis=1)
         policy_list.append(policy)
-        #for p in policy_list:
-        #    tot += expert_value - evaluate_policy(env,p)
-        #print("Episode Avg" + str(k) + ": " + str(tot/len(policy_list)))
-        print("Episode Last" + str(k) + ": " + str(expert_value - evaluate_policy(env,policy)))
-        # plt.figure(k)
-        # plt.scatter(np.stack(states)[:,0], np.stack(states)[:,1], color="blue" )
-        # plt.scatter(np.stack(data["states"][0])[:,0], np.stack(data["states"][0])[:,1],color="red")
-        # plt.savefig("figs/"+ str(k) + "imit.png")
+        rs.append((expert_value - evaluate_policy(env,policy))/expert_value)
+        print("Episode Last" + str(k) + ": " + str(rs[-1]))
     with open(assets_dir(subfolder+f"/fra/reward_history/{args.seed}_{args.n_expert_trajs}.p"), "wb") as f:
         pickle.dump(np.array(rs), f)
     with open(assets_dir(subfolder+f"/fra/learned_models/{args.seed}_{args.n_expert_trajs}.p"), "wb") as f:
