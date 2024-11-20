@@ -173,8 +173,9 @@ def run_imitation_learning(K, eta=0.01, tau=20):
     covariance = 1e-15*np.eye(env.features.shape[2])
     policy = np.ones((env.observation_space.n,env.action_space.n))/env.action_space.n
     policy_list.append(policy)
-    for _ in range(tau):
-        rs = [(expert_value - evaluate_policy(env,policy))/expert_value]
+    rs = [(expert_value - evaluate_policy(env,policy))/expert_value]
+    for _ in range(tau-1):
+        rs.append((expert_value - evaluate_policy(env,policy))/expert_value)
     for k in range(K):
         states_dataset = []
         actions_dataset = []

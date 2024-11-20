@@ -14,20 +14,21 @@ parser = argparse.ArgumentParser(description='Grid search hyperparameters')
 parser.add_argument('--n-expert-trajs', type=int, default=2, metavar='G')
 args = parser.parse_args()
 subfolder = "envLinMDP-v0"
-algs = ["fra","ilarl_lin"]
+algs = ["fra","ilarl_lin","ppil_lin","iqlearn_lin"]
 to_plot_x = []
 to_plot_y = []
 means = []
 stds = []
 xs = []
-colors = {"fra": "green",
-# """             "iqlearn":"goldenrod",
+colors = {"ppil_lin": "green",
+            "fra":"red",
+            "iqlearn_lin":"goldenrod",
 #             "gail":"brown",
 #             "airl":"gray",
-#             "reirl":"darkcyan", """
+#             "reirl":"darkcyan",
             "ilarl_lin":"blue",}
 
-alg_name = {"fra": "FRA", "ilarl_lin": "ILARL"}
+alg_name = {"fra": "FRA", "ilarl_lin": "ILARL","ppil_lin":"PPIL","iqlearn_lin":"IQ-Learn"}
 for alg in algs:
     to_plot_x = []
     to_plot_y = []
@@ -36,16 +37,18 @@ for alg in algs:
             data = data = pickle.load(f)
 
             
-        #data = np.cumsum(data)/np.arange(1,len(data)+1)
+        data = np.cumsum(data)/np.arange(1,len(data)+1)
 
-        data = data[:15]
-            
+        
 
         to_plot_x.append(np.arange(len(data)))
         to_plot_y.append(data)
-        means.append(np.mean(to_plot_y,axis=0))
+    means.append(np.mean(to_plot_y,axis=0))
     stds.append(np.std(to_plot_y, axis=0))
     xs.append(np.mean(to_plot_x,axis=0))
+
+    if alg == "iqlearn_lin":
+        print(means)
 
 
 fig = plt.figure()

@@ -1,0 +1,215 @@
+import argparse
+import gym
+import my_gym
+from scipy import special
+import os
+import sys
+import pickle
+import time
+import matplotlib.pyplot as plt
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from utils import *
+from models.mlp_policy import Policy
+from models.mlp_critic import Value
+from models.mlp_policy_disc import DiscretePolicy
+from core.ppo import ppo_step
+from core.common import estimate_advantages
+from core.agent import Agent
+from itertools import product
+from train_expert.soft_value_iteration import get_expert
+
+parser = argparse.ArgumentParser(description='UCB')
+parser.add_argument('--env-name', default="LinMDP-v0", metavar='G',
+                    help='name of the environment to run')
+parser.add_argument('--expert-trajs', metavar='G',
+                    help='path to expert data')
+parser.add_argument('--render', action='store_true', default=False,
+                    help='render the environment')
+parser.add_argument('--eta', type=float, default=1.0, metavar='G',
+                    help='log std for the policy (default: -0.0)')
+parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
+                    help='discount factor (default: 0.99)')
+parser.add_argument('--num-threads', type=int, default=4, metavar='N',
+                    help='number of threads for agent (default: 4)')
+parser.add_argument('--seed', type=int, default=1, metavar='N',
+                    help='random seed (default: 1)')
+parser.add_argument('--max-iter-num', type=int, default=500, metavar='N',
+                    help='maximal number of main iterations (default: 500)')
+parser.add_argument('--log-interval', type=int, default=1, metavar='N',
+                    help='interval between training status logs (default: 10)')
+parser.add_argument('--save-model-interval', type=int, default=0, metavar='N',
+                    help="interval between saving model (default: 0, means don't save)")
+parser.add_argument('--gpu-index', type=int, default=0, metavar='N')
+parser.add_argument('--noiseE', type=float, default=0.0, metavar='G')
+parser.add_argument('--grid-type', type=int, default=None, metavar='N')
+parser.add_argument('--mass-mul', type=float, default=1.0, metavar='G',
+                    help="Multiplier for CartPole and Acrobot masses")
+parser.add_argument('--len-mul', type=float, default=1.0, metavar='G',
+                    help="Multiplier for CartPole and Acrobot lengths")
+parser.add_argument('--friction', default=False, action='store_true')
+parser.add_argument('--n-expert-trajs', type=int, default=2, metavar='N')
+args = parser.parse_args()
+np.random.seed(args.seed)
+torch.manual_seed(args.seed)
+dtype = torch.float64
+torch.set_default_dtype(dtype)
+device = torch.device('cuda', index=args.gpu_index) if torch.cuda.is_available() else torch.device('cpu')
+if torch.cuda.is_available():
+    torch.cuda.set_device(args.gpu_index)
+env = gym.make(args.env_name, feature_dim=20,  n_states=100, n_actions = 30)
+env.seed(args.seed)
+subfolder = "env"+str(args.env_name)
+if not os.path.isdir(assets_dir(subfolder+f"/ppil_lin/learned_models")):
+    os.makedirs(assets_dir(subfolder+f"/ppil_lin/learned_models"))
+if not os.path.isdir(assets_dir(subfolder+f"/ppil_lin/reward_history")):
+    os.makedirs(assets_dir(subfolder+f"/ppil_lin/reward_history"))
+def evaluate_policy(env,policy):
+    V = np.zeros(env.n_states)
+    for k in range(50):
+        Q = env.reward + env.gamma*env.transition@V
+        V = np.diag(policy.dot(Q.T))
+    return np.mean(V)
+def collect_trajectories(policy,n=1):
+    states_list = []
+    action_list = []
+    next_states_list = []
+    next_action_list = []
+    for _ in range(n):
+        state = env.reset()
+        h = 0
+        states = []
+        next_states = []
+        actions = []
+        rewards = []
+        done = False
+        while not done:
+            action = np.random.choice(env.action_space.n, p=policy[state])
+            
+            next_state, reward, done, _ = env.step(action)
+            states.append(state)
+            actions.append(action)
+            next_states.append(next_state)
+            rewards.append(reward)
+            state = next_state 
+            h = h + 1
+        #print(done)
+        if done:
+            states.append(state)
+            actions.append(np.random.choice(env.action_space.n))
+            next_state, reward, done, _ = env.step(action)
+            rewards.append(reward)
+            next_states.append(next_state)
+
+            last_action = np.random.choice(env.action_space.n, p=policy[state])
+            next_actions = actions[1:] 
+            next_actions.append(last_action)
+        states_list.append(states)
+        action_list.append(actions)
+        next_states_list.append(next_states)
+        next_action_list.append(next_actions)
+    if n==1:
+        return states, actions, rewards, next_states, next_actions
+    return states_list, action_list, rewards, next_states_list, next_action_list
+
+
+expert_policy = get_expert(env)
+
+expert_states, expert_actions, expert_rewards, _, _ = collect_trajectories(expert_policy,n=args.n_expert_trajs)
+expert_value = evaluate_policy(env,expert_policy)
+
+print(expert_value)
+
+
+def compute_features_expectation(states,actions, env):
+    features = []
+    for traj_states, traj_actions in zip(states[:args.n_expert_trajs], actions[:args.n_expert_trajs]):
+        h = 0
+        features_exp = 0
+        for state,action in zip(traj_states, traj_actions):
+            features_exp = features_exp + \
+                args.gamma**h * env.features_reward[state,action]
+            h = h + 1
+        features.append(features_exp)
+    return np.mean(features, axis=0)
+
+if args.n_expert_trajs == 1:
+    expert_fev = compute_features_expectation([expert_states], [expert_actions],env)
+else:
+    expert_fev = compute_features_expectation(expert_states, expert_actions,env)
+
+
+
+def run_ppil(K, tau=5):
+    theta = np.zeros(env.features.shape[2])
+    w = np.zeros(env.features_reward.shape[2])
+    policy_list = []
+    policy = np.ones((env.observation_space.n,env.action_space.n))/env.action_space.n
+    """create agent"""
+    rs = []
+    for k in range(K):
+        states_dataset = []
+        actions_dataset = []
+        next_states_dataset = []
+        next_actions_dataset = []
+        for i in range(tau):
+            states, actions, true_rewards, next_states, next_actions = collect_trajectories(policy,  
+                                                                n=1 
+                                                                 )
+            if i == 0:
+                states_traj_data = [states]
+                actions_traj_data = [actions]
+            else:
+                states_traj_data.append(states)
+                actions_traj_data.append(actions)
+            
+            policy_list.append(policy)
+            rs.append((expert_value - evaluate_policy(env,policy))/expert_value)
+            print("Episode Last" + str(k) + ": " + str(rs[-1]))
+            states_dataset = states_dataset + states
+            actions_dataset = actions_dataset + actions
+            next_states_dataset = next_states_dataset + next_states
+            next_actions_dataset = next_actions_dataset + next_actions
+        ### Approxiately solve logistic Bellman error minimization
+        z = np.ones(len(states_dataset))/len(states_dataset)
+        for _ in range(40): # before was 100
+            sample = np.random.choice(len(states_dataset), p = z)
+            sample2 = np.random.choice(len(actions_traj_data))
+
+            sample3 = np.random.choice(len(states_dataset), p = z)
+            g_hat = - env.features[states_dataset[sample], actions_dataset[sample]] + \
+                                    args.gamma*env.features[next_states_dataset[sample], 
+                                next_actions_dataset[sample]]+ \
+                                     (1 - args.gamma)*env.features[next_states_dataset[0], 
+                                actions_traj_data[sample2][0]]
+            
+            delta = np.zeros(len(states_dataset))
+            #for s,a in product(range(env.observation_space.n),range(env.action_space.n)):
+            r = env.features_reward.dot(w)
+            Q = env.features.dot(theta)
+            
+            
+            policy = special.softmax(-args.eta*Q + np.log(policy),axis=1)
+            V= -1/args.eta*special.logsumexp(-args.eta*Q + np.log(policy),axis=1)
+            for i in range(len(states_dataset)):
+                delta[i] = r[states_dataset[i],actions_dataset[i]] \
+                    + V[next_states_dataset[i]] - Q[states_dataset[i],actions_dataset[i]]
+            z = special.softmax(-delta)
+            theta = theta + 5e-5*g_hat
+            #compute_features_expectation(states_traj_data, actions_traj_data,env)
+            w = w + 1e-5*( env.features_reward[states_dataset[sample3],actions_dataset[sample3]]
+                            -
+                            expert_fev) #0.001
+        
+        
+        
+        # """ plt.figure(k)
+        # plt.scatter(np.stack(states)[:,0], np.stack(states)[:,1], color="blue" )
+        # plt.scatter(np.stack(data["states"][0])[:,0], np.stack(data["states"][0])[:,1],color="red")
+        # plt """.savefig("figs/"+ str(k) + "ppil.png")
+    with open(assets_dir(subfolder+f"/ppil_lin/reward_history/{args.seed}_{args.n_expert_trajs}.p"), "wb") as f:
+            pickle.dump(np.array(rs), f)
+    with open(assets_dir(subfolder+f"/ppil_lin/learned_models/{args.seed}_{args.n_expert_trajs}.p"), "wb") as f:
+            pickle.dump(policy_list, f)
+        
+run_ppil(args.max_iter_num)
