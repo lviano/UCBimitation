@@ -174,7 +174,6 @@ def run_imitation_learning(K, eta=0.01, tau=20):
     policy = np.ones((env.observation_space.n,env.action_space.n))/env.action_space.n
     policy_list.append(policy)
     for _ in range(tau):
-
         rs = [(expert_value - evaluate_policy(env,policy))/expert_value]
     for k in range(K):
         states_dataset = []

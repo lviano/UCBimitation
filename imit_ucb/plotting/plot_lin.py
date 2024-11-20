@@ -33,18 +33,13 @@ for alg in algs:
     to_plot_y = []
     for seed in range(0,10):
         with open(assets_dir(subfolder+f"/{alg}/reward_history/{seed}_{args.n_expert_trajs}.p"), "rb") as f:
-            if alg == "fra":
-                data = pickle.load(f)
-                ds = []
-                for j in range(int(len(data)/20)):
-                    ds.append(np.mean(data[j*20:(j+1)*20]))
-                data = ds
-            else:
-                data = pickle.load(f)
-                ds = [data[0]]
-                for j in range(1,int(len(data)/20)):
-                    ds.append(np.mean(data[j*20:(j+1)*20]))
-                data = ds
+            data = data = pickle.load(f)
+
+            
+        #data = np.cumsum(data)/np.arange(1,len(data)+1)
+
+        data = data[:15]
+            
 
         to_plot_x.append(np.arange(len(data)))
         to_plot_y.append(data)
@@ -63,20 +58,20 @@ for m,s,x,alg in zip(means, #[3:],
     print(alg)
     m_norm = m
     s_norm = s
-    ax.plot(x,m_norm,"-o", color=colors[alg], label=alg_name[alg])
+    ax.semilogy(x,m_norm,"-o", color=colors[alg], label=alg_name[alg])
     ax.fill_between(x,m_norm-s_norm,
                              m_norm+s_norm,
                              facecolor = colors[alg], 
                              alpha=0.1)
 plt.legend(fontsize=20)
-ax.xaxis.set_major_locator(MaxNLocator(4)) 
+#ax.xaxis.set_major_locator(MinNLocator(3)) 
 #ax.yaxis.set_major_locator(MaxNLocator(5)) 
 #ax.set_yticks([0,1])
 plt.xticks(fontsize=30)
 plt.yticks(fontsize=30)
 #plt.ylim([-0.1, 1.1])
 #plt.xlim([-1,200])
-plt.xlabel("MDP trajectories ( x 20)", fontsize=30)
+plt.xlabel("MDP trajectories", fontsize=30)
 #plt.ylabel("Normalized Return", fontsize=30)
 plt.tight_layout()
 plt.savefig(f"lin{args.n_expert_trajs}.pdf")

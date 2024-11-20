@@ -306,7 +306,7 @@ class LinearMDP(gym.Env):
         self.n_states = self.observation_space.n
         self.n_actions = self.action_space.n
     def step(self,a):
-        reward = self.reward[self.state]
+        reward = self.reward[self.state,a]
         if self.done:
             self.steps_from_last_reset = 0
             return self.state, \
