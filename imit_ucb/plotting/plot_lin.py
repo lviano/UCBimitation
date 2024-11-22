@@ -61,18 +61,18 @@ for m,s,x,alg in zip(means, #[3:],
     print(alg)
     m_norm = m
     s_norm = s
-    ax.semilogy(x,m_norm,"-o", color=colors[alg], label=alg_name[alg])
+    ax.plot(x,m_norm,"-o", color=colors[alg], label=alg_name[alg])
     ax.fill_between(x,m_norm-s_norm,
                              m_norm+s_norm,
                              facecolor = colors[alg], 
                              alpha=0.1)
 plt.legend(fontsize=20)
-#ax.xaxis.set_major_locator(MinNLocator(3)) 
-#ax.yaxis.set_major_locator(MaxNLocator(5)) 
+ax.xaxis.set_major_locator(MaxNLocator(4)) 
+ax.yaxis.set_major_locator(MaxNLocator(5)) 
 #ax.set_yticks([0,1])
 plt.xticks(fontsize=30)
 plt.yticks(fontsize=30)
-#plt.ylim([-0.1, 1.1])
+plt.xlim([-10, 400])
 #plt.xlim([-1,200])
 plt.xlabel("MDP trajectories", fontsize=30)
 #plt.ylabel("Normalized Return", fontsize=30)
