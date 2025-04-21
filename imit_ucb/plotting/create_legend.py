@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
  
 labels = ["ILARL (Ours)", "PPIL","IQLearn", "GAIL", "AIRL", "REIRL","BC"]
 colors = ["blue", "green",

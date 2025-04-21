@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description='Grid search hyperparameters')
 parser.add_argument('--n-expert-trajs', type=int, default=2, metavar='G')
 args = parser.parse_args()
 subfolder = "envLinMDP-v0"
-algs = ["fra","ilarl_lin","ppil_lin","iqlearn_lin"]
+algs = ["frareg","fra","ilarl_lin","ppil_lin","iqlearn_lin","optail_lin"]
 to_plot_x = []
 to_plot_y = []
 means = []
@@ -22,19 +22,21 @@ stds = []
 xs = []
 colors = {"ppil_lin": "green",
             "fra":"red",
+            "frareg":"orange",
             "iqlearn_lin":"goldenrod",
-#             "gail":"brown",
+             "optail_lin":"brown",
 #             "airl":"gray",
 #             "reirl":"darkcyan",
             "ilarl_lin":"blue",}
 
-alg_name = {"fra": "FRA", "ilarl_lin": "ILARL","ppil_lin":"PPIL","iqlearn_lin":"IQ-Learn"}
+alg_name = {"fra": "FRA (Ours)", "frareg": "RFRA (Ours)", "ilarl_lin": "ILARL","ppil_lin":"PPIL","iqlearn_lin":"IQ-Learn",
+"optail_lin":"OPTAIL"}
 for alg in algs:
     to_plot_x = []
     to_plot_y = []
     for seed in range(0,10):
         with open(assets_dir(subfolder+f"/{alg}/reward_history/{seed}_{args.n_expert_trajs}.p"), "rb") as f:
-            data = data = pickle.load(f)
+            data = pickle.load(f)
 
             
         data = np.cumsum(data)/np.arange(1,len(data)+1)
@@ -47,8 +49,7 @@ for alg in algs:
     stds.append(np.std(to_plot_y, axis=0))
     xs.append(np.mean(to_plot_x,axis=0))
 
-    if alg == "iqlearn_lin":
-        print(means)
+    
 
 
 fig = plt.figure()
@@ -61,12 +62,12 @@ for m,s,x,alg in zip(means, #[3:],
     print(alg)
     m_norm = m
     s_norm = s
-    ax.plot(x,m_norm,"-o", color=colors[alg], label=alg_name[alg])
+    ax.plot(x,m_norm,"-", color=colors[alg], label=alg_name[alg])
     ax.fill_between(x,m_norm-s_norm,
                              m_norm+s_norm,
                              facecolor = colors[alg], 
                              alpha=0.1)
-plt.legend(fontsize=20)
+#plt.legend(fontsize=20)
 ax.xaxis.set_major_locator(MaxNLocator(4)) 
 ax.yaxis.set_major_locator(MaxNLocator(5)) 
 #ax.set_yticks([0,1])
